@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+service DownloadService {
+    rpc DistributeDownload (DistributedDownloadRequest) returns (DownloadResponse) {};
+    rpc Download(DownloadRequest) returns (DownloadResponse) {};
+}
+
+message DistributedDownloadRequest {
+    string link = 1;
+    string saveto = 2;
+    string saveas = 3;
+    repeated string peerIPAddr = 4;
+}
+
+message DownloadRequest {
+    string link = 1;
+    uint64 start = 2;
+    uint64 end = 3;
+}
+
+message DownloadResponse {
+    bytes data = 1;
+    oneof access_anyone {
+        DistributedDownloadRequest DDRequest = 2;
+        DownloadRequest DRequest = 3;
+    }
+}
