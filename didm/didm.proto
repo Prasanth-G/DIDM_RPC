@@ -20,7 +20,7 @@ message DownloadRequest {
 
 message DownloadResponse {
     bytes data = 1;
-    oneof access_anyone {
+    oneof requestReceived {
         DistributedDownloadRequest DDRequest = 2;
         DownloadRequest DRequest = 3;
     }
