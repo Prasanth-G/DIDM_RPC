@@ -25,3 +25,9 @@ message DownloadResponse {
         DownloadRequest DRequest = 3;
     }
 }
+
+/*
+Commands for Generating `JavaScript` and `Go` Stub
+protoc --proto_path=didm --js_out=library=didm,binary:didm didm/didm.proto
+protoc -I didm/ didm/didm.proto --go_out=plugins=grpc:didm
+*/
