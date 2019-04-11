@@ -27,7 +27,10 @@ message DownloadResponse {
 }
 
 /*
-Commands for Generating `JavaScript` and `Go` Stub
-protoc --proto_path=didm --js_out=library=didm,binary:didm didm/didm.proto
+Commands for Generating `JavaScript` and `Go` Stub (Run the command from root dir (previour folder))
+1. JavaScript
+protoc -I=didm didm/didm.proto --js_out=import_style=commonjs:didm
+protoc -I=didm didm/didm.proto --grpc-web_out=import_style=commonjs,mode=grpcwebtext:didm
+2. Golang
 protoc -I didm/ didm/didm.proto --go_out=plugins=grpc:didm
 */
