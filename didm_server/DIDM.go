@@ -15,6 +15,7 @@ import (
 	"os"
 	"io/ioutil"
 	"io"
+	"encoding/json"
 	"path"
 	"github.com/Prasanth-G/split-downloader"
 	"strings"
@@ -258,7 +259,45 @@ func (s *server) worker() {
 	}
 }
 
+func Handler(writer http.ResponseWriter, request *http.Request){
+	switch request.Method{
+	case "POST":
+		var dict map[string]string
+		data, _ := ioutil.ReadAll(request.Body)
+		json.Unmarshal(data, &dict)
+		log.Println(dict)
+		if _, ok := dict["Url"]; !ok{
+			writer.WriteHeader(400)
+			writer.Write([]byte("Request Body must contain an Url"))
+		}
+		if _, ok := dict["Saveto"]; !ok{
+			dict["Saveto"] = ""
+		}
+		if _, ok := dict["Saveas"]; !ok{
+			dict["Saveas"] = ""
+		}
+		
+		s := server{}
+		in := &pb.DistributedDownloadRequest{
+			Link : dict["Url"],
+			Saveto : dict["Saveto"],
+			Saveas : dict["Saveas"],
+		}
+		var arr []string
+		json.Unmarshal([]byte(dict["PeerIPAddr"]), &arr)
+		in.PeerIPAddr = arr
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s.DistributeDownload(ctx, in)
+		
+	}
+}
+
 func main(){
+
+	http.HandleFunc("/", Handler)
+	go http.ListenAndServe(":8000", nil)
 
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
