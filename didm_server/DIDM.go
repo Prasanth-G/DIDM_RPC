@@ -87,6 +87,7 @@ func (s *server)AssignJobToWorker(work bytesrange){
 
 func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDownloadRequest) (*pb.DownloadResponse, error) {
 
+	log.Printf("DDRequest Received : %v", in)
 	s.Link = in.Link
 	finalResponse := &pb.DownloadResponse{
 		Data : nil,
@@ -193,6 +194,7 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 
 func (s *server) Download(ctx context.Context, in *pb.DownloadRequest) (*pb.DownloadResponse, error) {
 
+	log.Printf("DRequest Received : %v", in)
 	resp := &pb.DownloadResponse{
 		Data : nil,
 		RequestReceived : &pb.DownloadResponse_DRequest{DRequest : in},
@@ -206,7 +208,6 @@ func (s *server) Download(ctx context.Context, in *pb.DownloadRequest) (*pb.Down
 		return resp, err
 	}
 	resp.Data = out
-	fmt.Printf("Download Called : %v", in)
 	return resp, nil
 }
 
