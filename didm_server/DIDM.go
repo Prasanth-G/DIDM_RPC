@@ -111,7 +111,7 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 
 	//Check Whether the server supports downloading the files part by part
 	splittable := s.LinkHasRangeSupport()
-	if ! splittable || len(in.PeerIPAddr) == 1 {
+	if ! splittable {
 		final, err := os.OpenFile(path.Join(in.Saveto, in.Saveas), os.O_CREATE | os.O_APPEND | os.O_WRONLY, 0600)
 		if err != nil {
 			log.Printf("Error opening File: %v", err)
@@ -127,6 +127,11 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 		io.Copy(final, response.Body)
 		return finalResponse, nil
 	}
+	if len(in.PeerIPAddr) == 1 {
+		i := splitdownload.SDR{NO_OF_PARTS, in.Link}
+		i.CompleteDownload(in.Saveas, in.Saveto)
+	}
+
 
 	//Distribute Download
 	s.NeighbourDevices = make(map[int]string)
@@ -265,7 +270,7 @@ func Handler(writer http.ResponseWriter, request *http.Request){
 		var dict map[string]string
 		data, _ := ioutil.ReadAll(request.Body)
 		json.Unmarshal(data, &dict)
-		log.Println(dict)
+		log.Printf("Post Req data: %v", dict)
 		if _, ok := dict["Url"]; !ok{
 			writer.WriteHeader(400)
 			writer.Write([]byte("Request Body must contain an Url"))
@@ -290,7 +295,8 @@ func Handler(writer http.ResponseWriter, request *http.Request){
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		s.DistributeDownload(ctx, in)
-		
+		writer.WriteHeader(202)
+		writer.Write([]byte("File Downloaded"))
 	}
 }
 
