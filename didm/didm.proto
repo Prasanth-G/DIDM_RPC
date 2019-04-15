@@ -10,7 +10,6 @@ message DistributedDownloadRequest {
     string saveto = 2;
     string saveas = 3;
     repeated string peerIPAddr = 4;
-    uint64 noofparts = 5;
 }
 
 message DownloadRequest {

@@ -1,23 +1,27 @@
 {
-    "name": "Getting Started Example",
-    "version": "1.0",
-    "description": "Build an Extension!",
-    "permissions": [ "downloads", "activeTab", "declarativeContent" ,"storage"],
-    "browser_action": {
-        "default_popup": "popup.html",
-        "default_icon" : {
-            "16" : "images/logo.png",
-            "32" : "images/logo.png",
-            "64" : "images/logo.png",
-            "128" : "images/logo.png"
-        }
-    },
-    "options_page" : "options.html",
-    "icons" : {
-        "16" : "images/logo.png",
-        "32" : "images/logo.png",
-        "64" : "images/logo.png",
-        "128" : "images/logo.png"
-    },
-    "manifest_version": 2
+  "name": "DIDM",
+  "description": "Distribute and Download",
+  "version": "0.1",
+  "minimum_chrome_version": "16.0.884",
+  "permissions": ["downloads", "storage", "notifications", "contextMenus", "http://localhost:8000/*"],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon" : {
+      "16" : "images/logo.png",
+      "32" : "images/logo.png",
+      "64" : "images/logo.png",
+      "128" : "images/logo.png"
+    }
+  },
+  "icons" : {
+    "16" : "images/logo.png",
+    "32" : "images/logo.png",
+    "64" : "images/logo.png",
+    "128" : "images/logo.png"
+  },
+"manifest_version": 2
 }

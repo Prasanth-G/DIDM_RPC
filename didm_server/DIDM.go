@@ -17,7 +17,6 @@ import (
 	"io"
 	"encoding/json"
 	"path"
-	"github.com/Prasanth-G/split-downloader"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -47,9 +46,75 @@ type server struct{
 	mutex *sync.Mutex
 	jobsChannel chan job
 	completed chan int
+	noOfParts int
 }
 
+//SDR - Split Downloader
+type SDR struct{
+	NoOfParts int
+	DownloadLink string
+}
 
+func (downloader SDR)PartialDownload( bytes [2]uint64, saveas string, saveto string){
+	downloadLink, _ := url.Parse(downloader.DownloadLink)
+	if saveas == ""{
+		temp := strings.Split(downloadLink.Path, "/")
+		saveas = temp[len(temp) - 1]
+	}
+	if _, err := os.Stat(saveto); err != nil{
+		os.MkdirAll(saveto, os.ModeDir)
+	}
+	chunkSize := uint64(math.Ceil(float64(bytes[1] - bytes[0]) / float64(downloader.NoOfParts)))
+	output := make([][]byte, downloader.NoOfParts)
+	var waitgroup sync.WaitGroup
+	var jobs = make([]bytesrange, downloader.NoOfParts)
+	index := 0
+	for start := bytes[0]; start < bytes[1]; start += chunkSize{
+		end := start + chunkSize - 1
+		if end > bytes[1] + 1{
+			end = bytes[1]
+		}
+		//fmt.Printf("*********** %d \n %d \n", index, downloader.NoOfParts)
+		jobs[index] = bytesrange{index, start, end}
+		index++
+	}
+	for _, job := range jobs{
+		waitgroup.Add(1)
+		go func(job bytesrange){
+			defer waitgroup.Done()
+			var request *http.Request
+			request, _ = http.NewRequest("GET", downloader.DownloadLink, nil)
+			request.Header.Set("Range", "bytes="+strconv.FormatUint(job.start, 10)+"-"+strconv.FormatUint(job.end, 10))
+			client := &http.Client{}
+			response, err := client.Do(request)
+			if err != nil{
+				log.Println("Error Downloading ",request)
+			}
+			defer response.Body.Close()
+			body, _ := ioutil.ReadAll(response.Body)
+			output[job.order] = body
+			log.Printf("SDR : Downloaded %s\n", request.Header["Range"]);
+		}(job)
+	}
+	waitgroup.Wait()
+	final, err := os.OpenFile(path.Join(saveto,saveas),  os.O_CREATE | os.O_TRUNC | os.O_WRONLY, 0600)
+	if err != nil{
+		log.Println(err,"ERROR OPENING FILE")
+	}
+	defer final.Close()
+	for i:=0; i<downloader.NoOfParts; i++{
+		final.Write(output[i])
+	}
+}
+//CompleteDownload - Download the Whole file from internet
+func (downloader SDR)CompleteDownload(saveas string, saveto string){
+	response, _ := http.Head(downloader.DownloadLink)
+	downloader.PartialDownload([2]uint64{0, uint64(response.ContentLength)}, saveas, saveto)
+}
+
+/* RPC Server 
+** Expose a remote method `Download` to download a certain portion of a large file parallely
+*/
 func (s *server)LinkHasRangeSupport() bool {
 	client := &http.Client{}
 	request, err := http.NewRequest("HEAD", s.Link, nil)
@@ -88,7 +153,7 @@ func (s *server)AssignJobToWorker(work bytesrange){
 
 func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDownloadRequest) (*pb.DownloadResponse, error) {
 
-	log.Printf("DDRequest Received : %v", in)
+	log.Printf("DDRequest Received : %v\n", in)
 	s.Link = in.Link
 	finalResponse := &pb.DownloadResponse{
 		Data : nil,
@@ -102,6 +167,12 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 
 		if len(strings.TrimSpace(str[len(str)-1])) > 0 {
 			in.Saveas = str[len(str)-1]
+            if _, err := os.Stat(in.Saveas); !os.IsNotExist(err) {
+				number := 1
+				for _, err := os.Stat(fmt.Sprintf("%s (%d)", in.Saveas,number)); ! os.IsNotExist(err) ; number++ {}
+				in.Saveas = fmt.Sprintf("%s (%d)", in.Saveas,number)
+			}
+		
 		} else {
 			number := 1
 			for _, err := os.Stat(fmt.Sprintf("DIDM_Unnamed_File_%d", number)); ! os.IsNotExist(err) ; number++ {}
@@ -112,26 +183,29 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 	//Check Whether the server supports downloading the files part by part
 	splittable := s.LinkHasRangeSupport()
 	if ! splittable {
+		log.Println("Can't Download the file Parallely: Server doesn't support multiple connection")
 		final, err := os.OpenFile(path.Join(in.Saveto, in.Saveas), os.O_CREATE | os.O_APPEND | os.O_WRONLY, 0600)
 		if err != nil {
-			log.Printf("Error opening File: %v", err)
+			log.Printf("Error opening File: %v\n", err)
 			return finalResponse, err
 		}
 		defer final.Close()
 		response, err := http.Get(s.Link)
 		if err != nil{
-			log.Printf("Error while downloading: %v", err)
+			log.Printf("Error while downloading: %v\n", err)
 			return finalResponse, err
 		}
 		defer response.Body.Close()
 		io.Copy(final, response.Body)
 		return finalResponse, nil
 	}
-	if len(in.PeerIPAddr) == 1 {
-		i := splitdownload.SDR{NO_OF_PARTS, in.Link}
-		i.CompleteDownload(in.Saveas, in.Saveto)
-	}
 
+	if len(in.PeerIPAddr) == 0 {
+		log.Printf("SDR Started Download : %s\n", in.Link)
+		i := SDR{s.noOfParts, in.Link}
+		i.CompleteDownload(in.Saveas, in.Saveto)
+		return finalResponse, nil
+	}
 
 	//Distribute Download
 	s.NeighbourDevices = make(map[int]string)
@@ -142,7 +216,7 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 	rand.Seed(time.Now().UTC().UnixNano())
 	response, err := http.Head(in.Link)
 	if err != nil{
-		log.Printf("Error sending HEAD Request: %v", err)
+		log.Printf("Error sending HEAD Request: %v\n", err)
 		return finalResponse, err
 	}
 
@@ -152,14 +226,14 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 	}
 	
 	//divide the file into 8 parts; update - split file depends on DOWNLOAD SPEED, and NUMBER OF NEIGHBOUR DEVICE
-	chunkSize := uint64(math.Ceil(float64(response.ContentLength) / float64(NO_OF_PARTS)))
+	chunkSize := uint64(math.Ceil(float64(response.ContentLength) / float64(s.noOfParts)))
 	NoOfWorkers := len(s.NeighbourDevices)
 
 	for w := 0; w < NoOfWorkers; w++ {
 		go s.worker()
 	}
 
-	var jobs = make([]bytesrange, NO_OF_PARTS)
+	var jobs = make([]bytesrange, s.noOfParts)
 	var start uint64
 	index := 0
 	uContentLength := uint64(response.ContentLength)
@@ -175,42 +249,42 @@ func (s *server) DistributeDownload (ctx context.Context, in *pb.DistributedDown
 	for _, j := range jobs{
 		s.AssignJobToWorker(j)
 	}
-	for i := 0; i < NO_OF_PARTS; i++{
+	for i := 0; i < s.noOfParts; i++{
 		log.Println(<-s.completed)
 	}
 	defer close(s.jobsChannel)
 
 	final, err := os.OpenFile(path.Join(in.Saveto, in.Saveas), os.O_CREATE | os.O_APPEND | os.O_WRONLY, 0600)
 	if err != nil{
-		log.Printf("Error opening File: %v", err)
+		log.Printf("Error opening File: %v\n", err)
 		return finalResponse, err
 	}
 
 	defer final.Close()
-	for i:= 0;i < NO_OF_PARTS; i++{
+	for i:= 0;i < s.noOfParts; i++{
 		file := "Part_"+strconv.Itoa(i)
 		out, _ := ioutil.ReadFile(file)
 		defer os.Remove(file)
 		final.Write(out)
 	}
 
-	fmt.Printf("Distributed Download Called : %v", in)
+	log.Printf("DistributedDownload Completed: %v\n", in)
 	return finalResponse, nil
 }
 
 func (s *server) Download(ctx context.Context, in *pb.DownloadRequest) (*pb.DownloadResponse, error) {
 
-	log.Printf("DRequest Received : %v", in)
+	log.Printf("DRequest Received : %v\n", in)
 	resp := &pb.DownloadResponse{
 		Data : nil,
 		RequestReceived : &pb.DownloadResponse_DRequest{DRequest : in},
 	}
 
-	i := splitdownload.SDR{NO_OF_PARTS, in.Link}
+	i := SDR{int(in.Noofparts), in.Link}
 	i.PartialDownload([2]uint64{in.Start, in.End}, "file", "")
 	out, err := ioutil.ReadFile("file")
 	if err != nil {
-		log.Printf("Error Reading temp File: %v", err)
+		log.Printf("Error Reading temp File: %v\n", err)
 		return resp, err
 	}
 	resp.Data = out
@@ -225,7 +299,7 @@ func (s *server) worker() {
 		//Make call to `Download` function in other systems
 		conn, err := grpc.Dial(j.worker, grpc.WithInsecure())
 		if err != nil {
-			log.Printf("Can't connect to remote machine: %v", err)
+			log.Printf("Can't connect to remote machine: %v\n", err)
 			s.NeighbourDevices[j.workerid] = j.worker
 			s.AssignJobToWorker(j.work)
 			continue
@@ -240,9 +314,10 @@ func (s *server) worker() {
 			Link	: s.Link,
 			Start	: j.work.start,
 			End		: j.work.end,
+			Noofparts : uint64(s.noOfParts),
 		})
 		if err != nil {
-			log.Printf("Can't Call the Remote Method: %v", err)
+			log.Printf("Can't Call the Remote Method: %v\n", err)
 			s.NeighbourDevices[j.workerid] = j.worker
 			s.AssignJobToWorker(j.work)
 			continue
@@ -250,7 +325,7 @@ func (s *server) worker() {
 
 		final, err := os.OpenFile("Part_"+strconv.Itoa(j.work.order), os.O_CREATE | os.O_TRUNC | os.O_WRONLY, 0600)
 		if err != nil{
-			log.Printf("Can't Open temp File: %v", err)
+			log.Printf("Can't Open temp File: %v\n", err)
 			s.NeighbourDevices[j.workerid] = j.worker
 			s.AssignJobToWorker(j.work)
 			continue
@@ -264,13 +339,17 @@ func (s *server) worker() {
 	}
 }
 
+/* REST API for local communication
+** 
+*/
 func Handler(writer http.ResponseWriter, request *http.Request){
 	switch request.Method{
 	case "POST":
+		defer TimeTrack(time.Now())
 		var dict map[string]string
 		data, _ := ioutil.ReadAll(request.Body)
 		json.Unmarshal(data, &dict)
-		log.Printf("Post Req data: %v", dict)
+		log.Printf("Post Req data: %v\n", dict)
 		if _, ok := dict["Url"]; !ok{
 			writer.WriteHeader(400)
 			writer.Write([]byte("Request Body must contain an Url"))
@@ -281,8 +360,23 @@ func Handler(writer http.ResponseWriter, request *http.Request){
 		if _, ok := dict["Saveas"]; !ok{
 			dict["Saveas"] = ""
 		}
-		
+
 		s := server{}
+		if _, ok := dict["NoOfParts"]; !ok{
+			s.noOfParts = NO_OF_PARTS;
+		} else {
+			i, err := strconv.ParseInt(dict["NoOfParts"], 10, 64)
+			if err != nil{
+				s.noOfParts = 8;
+			} else {
+				if i > 32 {
+					s.noOfParts = 32
+				}else {
+					s.noOfParts = int(i);
+				}
+			}
+		}
+		
 		in := &pb.DistributedDownloadRequest{
 			Link : dict["Url"],
 			Saveto : dict["Saveto"],
@@ -294,11 +388,22 @@ func Handler(writer http.ResponseWriter, request *http.Request){
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		s.DistributeDownload(ctx, in)
-		writer.WriteHeader(202)
-		writer.Write([]byte("File Downloaded"))
+		_, err := s.DistributeDownload(ctx, in)
+		if err != nil {
+			writer.WriteHeader(400)
+			writer.Write([]byte(err.Error()))
+		} else {
+			writer.WriteHeader(202)
+			writer.Write([]byte("File Downloaded"))
+		}
 	}
 }
+
+func TimeTrack(start time.Time){
+	elapsed := time.Since(start)
+	log.Printf("Time Taken to serve the request : %s\n", elapsed)
+}
+
 
 func main(){
 
@@ -316,5 +421,7 @@ func main(){
 		log.Fatalf("Failed to serve: %v", err)
 	}
 	
-	//"https://maggiemcneill.files.wordpress.com/2012/04/the-complete-sherlock-holmes.pdf"
+	/* Test Link :
+	** "https://maggiemcneill.files.wordpress.com/2012/04/the-complete-sherlock-holmes.pdf"
+	*/
 }

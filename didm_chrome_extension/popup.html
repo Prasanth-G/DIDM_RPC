@@ -1,15 +1,190 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <style>
-      button {
-        height: 20px;
-      }
-    </style>
-  </head>
-  <body>
-    <input id="downloadLink" size="75">
-    <button id="startDownload">Download</button>
-    <script src="popup.js"></script>
-  </body>
-</html> 
+<head>
+  <style>
+    .switch {
+  position: relative;
+  display: inline-block;
+  width: 90px;
+  height: 34px;
+}
+
+.switch input {display:none;}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ca2222;
+  -webkit-transition: .4s;
+  transition: .4s;
+   border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #2ab934;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(55px);
+}
+
+/*------ ADDED CSS ---------*/
+.slider:after
+{
+ content:'NO';
+ color: white;
+ display: block;
+ position: absolute;
+ transform: translate(-50%,-50%);
+ top: 50%;
+ left: 50%;
+ font-size: 10px;
+ font-family: Verdana, sans-serif;
+}
+
+input:checked + .slider:after
+{  
+  content:'YES';
+}
+
+  /* other styles */
+  #startDownloadbtn {
+    background-color: #4285F5;
+    color: white;
+    font-size: 12px;
+    padding: 6px 6px 6px 6px;
+    margin: 10px 2px 5px 5px;
+    border-radius: 8px;
+  }
+
+  #dinput {
+    background-color: white;
+    font-size: 12px;
+    padding: 6px 6px 6px 6px;
+    margin: 10px 3px 5px 10px;
+    border-radius: 8px;
+  }
+
+  #toggleSettings{
+    float:right; 
+    padding: 4px;
+    border-radius: 20px;
+    margin: 0px 0px 10px 0px;
+    vertical-align:middle;
+    text-align:center;
+  }
+
+  .addrInput {
+    background-color: white;
+    font-size: 10px;
+    padding: 6px 6px 6px 6px;
+    margin: 10px;
+    border-radius: 8px;
+  }
+  
+  #AddPeers{
+    border-radius: 4px;
+    background-color:  #0F9D28;
+    color:white;
+  }
+
+  .ip{
+    background-color: lightgray;
+    font-size: 14px;
+    width : 130px;
+    padding: 4px;
+    margin: 5px 0px 5px 50px;
+    border: 0;
+    box-shadow: none;
+    border-radius: 4px;
+  }
+
+  .xbtn{
+    background-color: whitesmoke;
+    font-size: 10px;
+    color: red;
+    border: 0;
+    box-shadow: none;
+    border-radius: 5px;
+    padding: 4px;
+  }
+
+  </style>
+  <script src="jquery.min.js"></script>
+  <script src='popup.js'></script>
+</head>
+<body style="width: 500px;">
+
+    <div align="right">
+        <div style="margin: 10px">
+          Set as Default
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggleDefault">
+          <div class="slider round">
+          </div>
+        </label>
+    </div>
+
+<div id="downloadarea" style="align-content: center">
+  <input id="dinput" type="url" placeholder="Enter the download link" size=52>
+  <button id="startDownloadbtn">Download</button>
+</div><br>
+
+<fieldset>
+  <legend align="right">
+      <button id="toggleSettings">
+          <label>settings</label>
+          <img src="images/settings.png">
+      </button>
+  </legend>
+    <div id="settings" style="padding: 5px 10px 10px 10px">
+        <div style="padding: 0px 10px 10px 0px">
+          Maximum number of Network Connection : 
+          <select id="NoOfParts">
+              <option value="2">2</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+              <option value="16">16</option>
+              <option value="32">32</option>
+            </select> 
+        </div>
+        <div id="peerIPAddrs">
+            Enter Peer IP : <input id="ipInput" class="addrInput" size="20" >
+          <button id="AddPeers" >Add Device</button></br>
+        </div>
+        List of Peers :</br>
+        <button id="removePeers" class="xbtn">Remove All</button>
+        <div id="peerIPList">
+            <!-- <input class="ip" id="ip1" value="255.255.255.255" readonly>
+                <button id="ip1" class="xbtn">x</button>
+            </input> -->
+        </div>
+      </div>
+</fieldset>
+
+
+</body>
+</html>
