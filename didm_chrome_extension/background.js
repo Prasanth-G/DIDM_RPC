@@ -5,7 +5,7 @@ var override = false;
 function startDownload(url) {
 
     xhr = new XMLHttpRequest();
-    xhr.open("POST", "http://localhost:8000/", true);
+    xhr.open("POST", "http://localhost:9090/", true);
     xhr.setRequestHeader("Content-type", "application/json");
     xhr.onreadystatechange = function () {
         if (xhr.readyState == 4) {
