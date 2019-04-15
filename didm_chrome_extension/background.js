@@ -29,7 +29,7 @@ function startDownload(url) {
         "PeerIPAddr" : JSON.stringify(PeerIPs),
         "NoOfParts" : NoOfParts
     });
-    alert(data);
+    alert("Download Link: " + url + '\n Parts: ' + NoOfParts);
     xhr.send(data);
 }
 
